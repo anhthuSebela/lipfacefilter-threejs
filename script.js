@@ -11,9 +11,8 @@ document.body.appendChild(videoElement);
 let videoTexture, backgroundPlane;
 let videoAspect;
 
-const upperLipPoints = [  61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 306, 291, 292, 415, 310, 311, 312, 13, 82, 81, 80, 191, 78, 62, 76, 61];
-const lowerLipPoints = [  61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 306, 292, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 62, 76, 61
-];
+const upperLipPoints = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191, 78, 62];
+const lowerLipPoints = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 62];
 
 function initThreeJS() {
   videoAspect = videoElement.videoWidth / videoElement.videoHeight;
@@ -28,6 +27,19 @@ function initThreeJS() {
   backgroundPlane = new THREE.Mesh(planeGeometry, planeMaterial);
   backgroundPlane.position.z = -1;
   scene.add(backgroundPlane);
+
+  addLights();
+}
+
+function addLights() {
+  // Add ambient light
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+  scene.add(ambientLight);
+
+  // Add directional light
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  directionalLight.position.set(0, 1, 1);
+  scene.add(directionalLight);
 }
 
 function updateCameraAndRenderer() {
@@ -67,42 +79,39 @@ function updateCameraAndRenderer() {
   }
 }
 
-function createLipGeometry(upperPoints, lowerPoints, face) {
+function createFilledLipGeometry(points, face) {
   const geometry = new THREE.BufferGeometry();
   const vertices = [];
 
-  // Add upper lip points
-  for (let i of upperPoints) {
-    vertices.push(face[i].x - 0.5, -face[i].y + 0.5, face[i].z);
-  }
-
-  // Add lower lip points
-  for (let i of lowerPoints) {
+  for (let i of points) {
     vertices.push(face[i].x - 0.5, -face[i].y + 0.5, face[i].z);
   }
 
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
 
-  // Create a line between all points
-  const indices = [];
-  for (let i = 0; i < vertices.length / 3 - 1; i++) {
-    indices.push(i, i + 1);
+  // Use THREE.ShapeBufferGeometry to create a filled shape
+  const shape = new THREE.Shape();
+  shape.moveTo(vertices[0], vertices[1]);
+  for (let i = 3; i < vertices.length; i += 3) {
+    shape.lineTo(vertices[i], vertices[i + 1]);
   }
-  // Close the loop
-  indices.push(vertices.length / 3 - 1, 0);
+  shape.closePath();
 
-  geometry.setIndex(indices);
-
-  return geometry;
+  const shapeGeometry = new THREE.ShapeGeometry(shape);
+  return shapeGeometry;
 }
 
-const lipMaterial = new THREE.LineBasicMaterial({
-  color: 0xFF0000,
-  linewidth: 2
+const lipMaterial = new THREE.MeshPhongMaterial({
+  color: 0xFF0000, // Red color, you can change this to any color you want
+  shininess: 0, // Reduces shininess for a more matte look
+  specular: 0x000000, // No specular highlights
+  side: THREE.DoubleSide // Ensures the material is visible from both sides
 });
 
-const lipMesh = new THREE.Line(new THREE.BufferGeometry(), lipMaterial);
-scene.add(lipMesh);
+const upperLipMesh = new THREE.Mesh(new THREE.BufferGeometry(), lipMaterial);
+const lowerLipMesh = new THREE.Mesh(new THREE.BufferGeometry(), lipMaterial);
+scene.add(upperLipMesh);
+scene.add(lowerLipMesh);
 
 // Set up MediaPipe Face Mesh
 const faceMesh = new FaceMesh({
@@ -134,15 +143,22 @@ camera2.start();
 function onResults(results) {
   if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
     const face = results.multiFaceLandmarks[0];
-    // Create lip geometry
-    const lipGeometry = createLipGeometry(upperLipPoints, lowerLipPoints, face);
-    // Update lip mesh
-    lipMesh.geometry.dispose();
-    lipMesh.geometry = lipGeometry;
     
-    // Adjust the position and scale of the lip mesh
-    lipMesh.position.set(0, 0, 0);
-    lipMesh.scale.set(1, 1, 1);
+    // Create upper lip geometry
+    const upperLipGeometry = createFilledLipGeometry(upperLipPoints, face);
+    upperLipMesh.geometry.dispose();
+    upperLipMesh.geometry = upperLipGeometry;
+    
+    // Create lower lip geometry
+    const lowerLipGeometry = createFilledLipGeometry(lowerLipPoints, face);
+    lowerLipMesh.geometry.dispose();
+    lowerLipMesh.geometry = lowerLipGeometry;
+    
+    // Adjust the position and scale of the lip meshes
+    upperLipMesh.position.set(0, 0, 0);
+    upperLipMesh.scale.set(1, 1, 1);
+    lowerLipMesh.position.set(0, 0, 0);
+    lowerLipMesh.scale.set(1, 1, 1);
   }
 }
 
