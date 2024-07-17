@@ -9,20 +9,14 @@ videoElement.style.display = 'none';
 document.body.appendChild(videoElement);
 
 let videoTexture, backgroundPlane;
+let videoAspect;
+
+const upperLipPoints = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 306, 291, 292, 415, 310, 311, 312, 13, 82, 81, 80, 191, 78, 62, 72, 61];
+const lowerLipPoints = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 306, 292, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 62, 76, 61];
 
 function initThreeJS() {
-  const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
-  const width = window.innerWidth;
-  const height = width / videoAspect;
-
-  camera = new THREE.OrthographicCamera(
-    -0.5, 0.5, 0.5 * (height / width), -0.5 * (height / width), 0.1, 1000
-  );
-  camera.position.z = 5;
-
-  renderer = new THREE.WebGLRenderer({ alpha: true });
-  renderer.setSize(width, height);
-  document.getElementById('scene-container').appendChild(renderer.domElement);
+  videoAspect = videoElement.videoWidth / videoElement.videoHeight;
+  updateCameraAndRenderer();
 
   // Create video texture
   videoTexture = new THREE.VideoTexture(videoElement);
@@ -33,13 +27,44 @@ function initThreeJS() {
   backgroundPlane = new THREE.Mesh(planeGeometry, planeMaterial);
   backgroundPlane.position.z = -1;
   scene.add(backgroundPlane);
-
-  // Adjust scene scale
-  scene.scale.set(1, 1, 1); // Flip vertically
 }
 
-const upperLipPoints = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 306, 291, 292, 415, 310, 311, 312, 13, 82, 81, 80, 191, 78, 62, 72, 61];
-const lowerLipPoints = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 306, 292, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 62, 76, 61];
+function updateCameraAndRenderer() {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+
+  // Calculate the aspect ratio of the container
+  const containerAspect = width / height;
+
+  let scaleWidth = 1;
+  let scaleHeight = 1;
+
+  if (containerAspect > videoAspect) {
+    // Container is wider than video
+    scaleHeight = 1;
+    scaleWidth = (height * videoAspect) / width;
+  } else {
+    // Container is taller than video
+    scaleWidth = 1;
+    scaleHeight = (width / videoAspect) / height;
+  }
+
+  camera = new THREE.OrthographicCamera(
+    -0.5 * scaleWidth, 0.5 * scaleWidth,
+    0.5 * scaleHeight, -0.5 * scaleHeight,
+    0.1, 1000
+  );
+  camera.position.z = 5;
+
+  renderer = new THREE.WebGLRenderer({ alpha: true });
+  renderer.setSize(width, height);
+  document.getElementById('scene-container').appendChild(renderer.domElement);
+
+  // Update background plane size
+  if (backgroundPlane) {
+    backgroundPlane.scale.set(scaleWidth, scaleHeight, 1);
+  }
+}
 
 function createLipGeometry(upperPoints, lowerPoints, face) {
   const geometry = new THREE.BufferGeometry();
@@ -106,19 +131,20 @@ camera2.start();
 
 // Handle face tracking results
 function onResults(results) {
-    if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-      const face = results.multiFaceLandmarks[0];
-      // Create lip geometry
-      const lipGeometry = createLipGeometry(upperLipPoints, lowerLipPoints, face);
-      // Update lip mesh
-      lipMesh.geometry.dispose();
-      lipMesh.geometry = lipGeometry;
-      
-      // Adjust the position of the lip mesh
-      lipMesh.position.set(0, 0, 0);
-      lipMesh.scale.set(1, 1, 1);
-    }
+  if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+    const face = results.multiFaceLandmarks[0];
+    // Create lip geometry
+    const lipGeometry = createLipGeometry(upperLipPoints, lowerLipPoints, face);
+    // Update lip mesh
+    lipMesh.geometry.dispose();
+    lipMesh.geometry = lipGeometry;
+    
+    // Adjust the position and scale of the lip mesh
+    lipMesh.position.set(0, 0, 0);
+    lipMesh.scale.set(1, 1, 1);
   }
+}
+
 // Animation loop
 function animate() {
   requestAnimationFrame(animate);
@@ -130,22 +156,8 @@ function animate() {
 window.addEventListener('resize', onWindowResize, false);
 
 function onWindowResize() {
-  const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
-  const width = window.innerWidth;
-  const height = width / videoAspect;
-
-  camera.left = -0.5;
-  camera.right = 0.5;
-  camera.top = 0.5 * (height / width);
-  camera.bottom = -0.5 * (height / width);
+  updateCameraAndRenderer();
   camera.updateProjectionMatrix();
-
-  renderer.setSize(width, height);
-
-  // Update background plane size
-  if (backgroundPlane) {
-    backgroundPlane.scale.set(1, height / width, 1);
-  }
 }
 
 videoElement.addEventListener('loadedmetadata', () => {
