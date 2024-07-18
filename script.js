@@ -29,14 +29,12 @@ function initThreeJS() {
   scene.add(backgroundPlane);
 
   addLipLighting();
-
 }
 
 function addLipLighting() {
-  const lipHemisphereLight = new THREE.HemisphereLight(0xffffff, 0xb77572, 0.65);
-  lipHemisphereLight.position.set(0.5, 0.5, 1);
-  upperLipMesh.add(lipHemisphereLight);
-  lowerLipMesh.add(lipHemisphereLight.clone());
+  const hemiLight = new THREE.HemisphereLight(0xFFFFFF, 0x000000, 2.4);
+  upperLipMesh.add(hemiLight);
+  lowerLipMesh.add(hemiLight);
 }
 
 function updateCameraAndRenderer() {
@@ -79,14 +77,27 @@ function updateCameraAndRenderer() {
 function createFilledLipGeometry(points, face) {
   const geometry = new THREE.BufferGeometry();
   const vertices = [];
+  const uvs = [];
+
+  // Find the bounding box of the lip points
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (let i of points) {
+    minX = Math.min(minX, face[i].x);
+    maxX = Math.max(maxX, face[i].x);
+    minY = Math.min(minY, face[i].y);
+    maxY = Math.max(maxY, face[i].y);
+  }
 
   for (let i of points) {
     vertices.push(face[i].x - 0.5, -face[i].y + 0.5, face[i].z);
+    // Generate UV coordinates based on the normalized position within the bounding box
+    uvs.push((face[i].x - minX) / (maxX - minX), (face[i].y - minY) / (maxY - minY));
   }
 
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
 
-  // Use THREE.ShapeBufferGeometry to create a filled shape
+  // Use THREE.ShapeGeometry to create a filled shape
   const shape = new THREE.Shape();
   shape.moveTo(vertices[0], vertices[1]);
   for (let i = 3; i < vertices.length; i += 3) {
@@ -95,23 +106,27 @@ function createFilledLipGeometry(points, face) {
   shape.closePath();
 
   const shapeGeometry = new THREE.ShapeGeometry(shape);
+  shapeGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+
   return shapeGeometry;
 }
 
-// const lipNormalMap = new THREE.TextureLoader().load('textures/plasterNormalMap.jpeg');
+const textureLoader = new THREE.TextureLoader();
+const plasterAmbientOcclusionMap = textureLoader.load('textures/rough-plaster-ao.png');
+const plasterNormalMap = textureLoader.load('textures/rough-plaster-normal-dx.png');
 
-const lipMaterial = new THREE.MeshLambertMaterial({
-  color: 0xb76046, // Updated color to #b77572
-  side: THREE.DoubleSide, // Ensures the material is visible from both sides
-  transparent: true, // Enable transparency
-  opacity: 0.5 // Set the desired opacity (0 is fully transparent, 1 is fully opaque)
+const lipMaterial = new THREE.MeshStandardMaterial({
+  color: 0xb76046,
+  normalMap: plasterNormalMap,
+  aoMap: plasterAmbientOcclusionMap,
+  transparent: true,
+  opacity: 0.55,
 });
 
 const upperLipMesh = new THREE.Mesh(new THREE.BufferGeometry(), lipMaterial);
 const lowerLipMesh = new THREE.Mesh(new THREE.BufferGeometry(), lipMaterial);
 scene.add(upperLipMesh);
 scene.add(lowerLipMesh);
-
 
 // Set up MediaPipe Face Mesh
 const faceMesh = new FaceMesh({
@@ -154,6 +169,14 @@ function onResults(results) {
     lowerLipMesh.geometry.dispose();
     lowerLipMesh.geometry = lowerLipGeometry;
     
+    // Update UV attributes
+    upperLipMesh.geometry.attributes.uv = upperLipGeometry.attributes.uv;
+    lowerLipMesh.geometry.attributes.uv = lowerLipGeometry.attributes.uv;
+
+    // Add aoMap attribute (uv2)
+    upperLipMesh.geometry.setAttribute('uv2', upperLipGeometry.attributes.uv);
+    lowerLipMesh.geometry.setAttribute('uv2', lowerLipGeometry.attributes.uv);
+    
     // Adjust the position and scale of the lip meshes
     upperLipMesh.position.set(0, 0, 0);
     upperLipMesh.scale.set(1, 1, 1);
@@ -161,7 +184,6 @@ function onResults(results) {
     lowerLipMesh.scale.set(1, 1, 1);
   }
 }
-
 // Animation loop
 function animate() {
   requestAnimationFrame(animate);
