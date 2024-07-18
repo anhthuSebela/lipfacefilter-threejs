@@ -28,18 +28,15 @@ function initThreeJS() {
   backgroundPlane.position.z = -1;
   scene.add(backgroundPlane);
 
-  addLights();
+  addLipLighting();
+
 }
 
-function addLights() {
-  // Add ambient light
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-  scene.add(ambientLight);
-
-  // Add directional light
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  directionalLight.position.set(0, 1, 1);
-  scene.add(directionalLight);
+function addLipLighting() {
+  const lipHemisphereLight = new THREE.HemisphereLight(0xffffff, 0xb77572, 0.65);
+  lipHemisphereLight.position.set(0.5, 0.5, 1);
+  upperLipMesh.add(lipHemisphereLight);
+  lowerLipMesh.add(lipHemisphereLight.clone());
 }
 
 function updateCameraAndRenderer() {
@@ -101,17 +98,20 @@ function createFilledLipGeometry(points, face) {
   return shapeGeometry;
 }
 
-const lipMaterial = new THREE.MeshPhongMaterial({
-  color: 0xFF0000, // Red color, you can change this to any color you want
-  shininess: 0, // Reduces shininess for a more matte look
-  specular: 0x000000, // No specular highlights
-  side: THREE.DoubleSide // Ensures the material is visible from both sides
+// const lipNormalMap = new THREE.TextureLoader().load('textures/plasterNormalMap.jpeg');
+
+const lipMaterial = new THREE.MeshLambertMaterial({
+  color: 0xb76046, // Updated color to #b77572
+  side: THREE.DoubleSide, // Ensures the material is visible from both sides
+  transparent: true, // Enable transparency
+  opacity: 0.5 // Set the desired opacity (0 is fully transparent, 1 is fully opaque)
 });
 
 const upperLipMesh = new THREE.Mesh(new THREE.BufferGeometry(), lipMaterial);
 const lowerLipMesh = new THREE.Mesh(new THREE.BufferGeometry(), lipMaterial);
 scene.add(upperLipMesh);
 scene.add(lowerLipMesh);
+
 
 // Set up MediaPipe Face Mesh
 const faceMesh = new FaceMesh({
